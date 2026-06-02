@@ -1,13 +1,17 @@
 class DeepFilterProcessor extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
     this.inputBuffer = [];
     this.outputBuffer = [];
     this.totalFrames = 0;
-    this.processedFrames = 0;
 
-    // Create Web Worker
-    this.worker = new Worker('/workers/onnx-worker.js');
+    // Receive worker from main thread via options
+    this.worker = options.processorOptions?.worker;
+
+    if (!this.worker) {
+      console.error('No worker provided to AudioWorklet');
+      return;
+    }
 
     // Receive messages from Worker
     this.worker.onmessage = (e) => {
