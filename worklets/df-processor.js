@@ -1,17 +1,19 @@
 class DeepFilterProcessor extends AudioWorkletProcessor {
-  constructor(options) {
+  constructor() {
     super();
     this.inputBuffer = [];
     this.outputBuffer = [];
     this.totalFrames = 0;
+    this.worker = null;
+  }
 
-    // Receive worker from main thread via options
-    this.worker = options.processorOptions?.worker;
+  static get parameterDescriptors() {
+    return [];
+  }
 
-    if (!this.worker) {
-      console.error('No worker provided to AudioWorklet');
-      return;
-    }
+  // Worker will be set via port message after construction
+  setWorker(worker) {
+    this.worker = worker;
 
     // Receive messages from Worker
     this.worker.onmessage = (e) => {
@@ -24,7 +26,11 @@ class DeepFilterProcessor extends AudioWorkletProcessor {
 
     // Forward initialization commands from main thread
     this.port.onmessage = (e) => {
-      if (e.data.type === 'INIT') {
+      if (e.data.type === 'SET_WORKER') {
+        // Worker passed via message
+        this.setWorker(e.data.worker);
+        this.port.postMessage({ type: 'WORKER_ATTACHED' });
+      } else if (e.data.type === 'INIT' && this.worker) {
         this.worker.postMessage(e.data);
       }
     };
@@ -40,7 +46,7 @@ class DeepFilterProcessor extends AudioWorkletProcessor {
     this.totalFrames++;
 
     // When we have 480 samples, send to Worker (10ms @ 48kHz)
-    if (this.inputBuffer.length >= 480) {
+    if (this.inputBuffer.length >= 480 && this.worker) {
       const frame = this.inputBuffer.splice(0, 480);
       this.worker.postMessage({
         type: 'PROCESS_FRAME',
