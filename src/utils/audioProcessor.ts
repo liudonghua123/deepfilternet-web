@@ -89,7 +89,7 @@ export async function processAudio(
 
   onProgress?.(0.2)
 
-  const processed = await runInference(float32, (p) => {
+  const processed = await runInference(float32, inputBuffer.sampleRate, (p) => {
     onProgress?.(0.2 + p * 0.6)
   })
 

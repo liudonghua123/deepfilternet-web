@@ -1,23 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import DropZone from './components/DropZone.vue'
 import WaveformCanvas from './components/WaveformCanvas.vue'
-import ModelSelector from './components/ModelSelector.vue'
 import ProcessButton from './components/ProcessButton.vue'
 import AudioPlayer from './components/AudioPlayer.vue'
 import { decodeAudioFile, processAudio, getWaveformPeaks } from './utils/audioProcessor'
-import type { ModelType, ModelStatus, ProcessStatus } from './types'
+import type { ModelStatus, ProcessStatus } from './types'
 import { loadModel } from './utils/onnxRuntime'
-import { getCachedModel } from './utils/modelCache'
 
 // State
 const audioFile = ref<File | null>(null)
 const audioBuffer = ref<AudioBuffer | null>(null)
 const processedBuffer = ref<AudioBuffer | null>(null)
 
-const selectedModel = ref<ModelType>('light')
 const modelStatus = ref<ModelStatus>('unloaded')
-const downloadProgress = ref(0)
 
 const processStatus = ref<ProcessStatus>('idle')
 const processProgress = ref(0)
@@ -76,33 +72,6 @@ async function handleFileSelected(file: File) {
   }
 }
 
-async function handleModelChange(model: ModelType) {
-  selectedModel.value = model
-  if (modelStatus.value !== 'ready') {
-    await loadSelectedModel()
-  }
-}
-
-async function loadSelectedModel() {
-  try {
-    modelStatus.value = 'downloading'
-    downloadProgress.value = 0
-
-    const cached = await getCachedModel(selectedModel.value)
-    if (cached) {
-      modelStatus.value = 'loading'
-      await loadModel(cached)
-      modelStatus.value = 'ready'
-      return
-    }
-
-    modelStatus.value = 'ready'
-  } catch (e) {
-    modelStatus.value = 'error'
-    error.value = '模型加载失败'
-  }
-}
-
 async function handleProcess() {
   if (!audioBuffer.value || modelStatus.value !== 'ready') return
 
@@ -121,7 +90,20 @@ async function handleProcess() {
   }
 }
 
-loadSelectedModel()
+async function loadSelectedModel() {
+  try {
+    modelStatus.value = 'downloading'
+    await loadModel()
+    modelStatus.value = 'ready'
+  } catch (e) {
+    modelStatus.value = 'error'
+    error.value = '模型加载失败'
+  }
+}
+
+onMounted(() => {
+  loadSelectedModel()
+})
 </script>
 
 <template>
@@ -241,16 +223,6 @@ loadSelectedModel()
             label="原始音频"
           />
         </template>
-
-        <!-- Model Selector -->
-        <ModelSelector
-          :selected-model="selectedModel"
-          :model-status="modelStatus"
-          :download-progress="downloadProgress"
-          @update:selected-model="handleModelChange"
-          @status-change="(s) => modelStatus = s"
-          @progress-update="(p) => downloadProgress = p"
-        />
 
         <!-- Process Button -->
         <div class="flex justify-center pt-2">
@@ -408,26 +380,16 @@ loadSelectedModel()
             </div>
           </section>
 
-          <!-- 预置模型 -->
+          <!-- 模型信息 -->
           <section>
-            <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-4">预置模型</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="p-4 border-2 border-blue-200 dark:border-blue-800 rounded-xl bg-blue-50/50 dark:bg-blue-900/20">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xl">⚡</span>
-                  <h3 class="font-bold text-slate-900 dark:text-white">轻量通用 (~8MB)</h3>
-                </div>
-                <p class="text-sm text-slate-600 dark:text-slate-400">适合快速预览和小文件处理</p>
-                <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">来源: HuggingFace Mirror</p>
+            <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-4">内置模型</h2>
+            <div class="p-4 border-2 border-blue-200 dark:border-blue-800 rounded-xl bg-blue-50/50 dark:bg-blue-900/20">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xl">🎯</span>
+                <h3 class="font-bold text-slate-900 dark:text-white">DeepFilterNet3 标准模型</h3>
               </div>
-              <div class="p-4 border-2 border-green-200 dark:border-green-800 rounded-xl bg-green-50/50 dark:bg-green-900/20">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xl">🎯</span>
-                  <h3 class="font-bold text-slate-900 dark:text-white">强力语音 (~45MB)</h3>
-                </div>
-                <p class="text-sm text-slate-600 dark:text-slate-400">最高质量人声增强</p>
-                <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">来源: HuggingFace Mirror</p>
-              </div>
+              <p class="text-sm text-slate-600 dark:text-slate-400">基于 DeepFilterNet3 优化的 ONNX 模型，适合通用音频降噪</p>
+              <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">模型文件: enc.onnx + df_dec.onnx + erb_dec.onnx</p>
             </div>
           </section>
 
