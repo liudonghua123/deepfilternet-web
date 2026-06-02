@@ -42,20 +42,23 @@ function applyWindow(samples: Float32Array): Float32Array {
 export async function loadModel(): Promise<void> {
   ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4
 
+  // Use Vite's base URL for proper path resolution in subdirectories
+  const baseUrl = import.meta.env.BASE_URL
+
   try {
-    encSession = await ort.InferenceSession.create('/standard-model/enc.onnx', {
+    encSession = await ort.InferenceSession.create(`${baseUrl}standard-model/enc.onnx`, {
       executionProviders: ['wasm'],
     })
     console.log('ENC inputs:', encSession.inputNames.join(', '))
     console.log('ENC outputs:', encSession.outputNames.join(', '))
 
-    dfDecSession = await ort.InferenceSession.create('/standard-model/df_dec.onnx', {
+    dfDecSession = await ort.InferenceSession.create(`${baseUrl}standard-model/df_dec.onnx`, {
       executionProviders: ['wasm'],
     })
     console.log('DF inputs:', dfDecSession.inputNames.join(', '))
     console.log('DF outputs:', dfDecSession.outputNames.join(', '))
 
-    erbDecSession = await ort.InferenceSession.create('/standard-model/erb_dec.onnx', {
+    erbDecSession = await ort.InferenceSession.create(`${baseUrl}standard-model/erb_dec.onnx`, {
       executionProviders: ['wasm'],
     })
     console.log('ERB inputs:', erbDecSession.inputNames.join(', '))
