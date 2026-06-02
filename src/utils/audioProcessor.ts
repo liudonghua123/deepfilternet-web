@@ -1,5 +1,9 @@
 import { encodeWav } from './wavEncoder'
 
+function isAudioWorkletSupported(): boolean {
+  return typeof AudioWorkletNode !== 'undefined'
+}
+
 let audioContext: AudioContext | null = null
 
 export function getAudioContext(): AudioContext {
@@ -68,10 +72,33 @@ export function float32ToAudioBuffer(
   return buffer
 }
 
+async function processAudioFallback(
+  inputBuffer: AudioBuffer,
+  onProgress?: (progress: number) => void
+): Promise<AudioBuffer> {
+  // Use the original synchronous processing (lazy import to avoid circular deps)
+  const { runInference } = await import('./onnxRuntime')
+  const float32 = audioBufferToFloat32(inputBuffer)
+
+  onProgress?.(0.1)
+  const processed = await runInference(float32, inputBuffer.sampleRate, (p) => {
+    onProgress?.(0.1 + p * 0.8)
+  })
+  onProgress?.(0.9)
+
+  return float32ToAudioBuffer(processed, inputBuffer.sampleRate, 1)
+}
+
 export async function processAudio(
   inputBuffer: AudioBuffer,
   onProgress?: (progress: number) => void
 ): Promise<AudioBuffer> {
+  // Fallback for browsers without AudioWorklet support
+  if (!isAudioWorkletSupported()) {
+    console.warn('AudioWorklet not supported, falling back to synchronous processing')
+    return processAudioFallback(inputBuffer, onProgress)
+  }
+
   const sampleRate = inputBuffer.sampleRate
 
   // Create OfflineAudioContext
