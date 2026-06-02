@@ -101,6 +101,9 @@ export async function processAudio(
 
   const sampleRate = inputBuffer.sampleRate
 
+  // Create Worker in main thread (where Worker is available)
+  const worker = new Worker('/workers/onnx-worker.js')
+
   // Create OfflineAudioContext
   const offlineCtx = new OfflineAudioContext(
     1,
@@ -111,8 +114,10 @@ export async function processAudio(
   // Load AudioWorklet
   await offlineCtx.audioWorklet.addModule('/worklets/df-processor.js')
 
-  // Create Processor node
-  const processor = new AudioWorkletNode(offlineCtx, 'df-processor')
+  // Create Processor node with Worker passed via options
+  const processor = new AudioWorkletNode(offlineCtx, 'df-processor', {
+    processorOptions: { worker }
+  })
 
   // Wait for Worker to be ready
   await new Promise<void>((resolve, reject) => {
@@ -139,6 +144,9 @@ export async function processAudio(
 
   // Render audio
   const renderedBuffer = await offlineCtx.startRendering()
+
+  // Clean up worker
+  worker.terminate()
 
   onProgress?.(1.0)
 
