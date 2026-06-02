@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DeepFilterNet Model Test</title>
+</head>
+<body>
+  <h1>DeepFilterNet Model Input Test</h1>
+  <button id="testBtn">Test Model Inputs</button>
+  <pre id="output"></pre>
+  <script type="module">
+    import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.0/dist/ort.webgpu.min.mjs';
+
+    const output = document.getElementById('output');
+    const log = (msg) => {
+      output.textContent += msg + '\n';
+      console.log(msg);
+    };
+
+    document.getElementById('testBtn').addEventListener('click', async () => {
+      try {
+        log('Loading models...');
+
+        const encSession = await ort.InferenceSession.create('/standard-model/enc.onnx', {
+          executionProviders: ['wasm'],
+        });
+        log('Encoder loaded');
+
+        // Get input names
+        log('\n=== ENCODER INPUTS ===');
+        for (const input of encSession.inputNames) {
+          log(`Input: ${input}`);
+        }
+        log('\n=== ENCODER OUTPUTS ===');
+        for (const output of encSession.outputNames) {
+          log(`Output: ${output}`);
+        }
+
+        const erbSession = await ort.InferenceSession.create('/standard-model/erb_dec.onnx', {
+          executionProviders: ['wasm'],
+        });
+        log('\n=== ERB DECODER INPUTS ===');
+        for (const input of erbSession.inputNames) {
+          log(`Input: ${input}`);
+        }
+        log('\n=== ERB DECODER OUTPUTS ===');
+        for (const output of erbSession.outputNames) {
+          log(`Output: ${output}`);
+        }
+
+        const dfSession = await ort.InferenceSession.create('/standard-model/df_dec.onnx', {
+          executionProviders: ['wasm'],
+        });
+        log('\n=== DF DECODER INPUTS ===');
+        for (const input of dfSession.inputNames) {
+          log(`Input: ${input}`);
+        }
+        log('\n=== DF DECODER OUTPUTS ===');
+        for (const output of dfSession.outputNames) {
+          log(`Output: ${output}`);
+        }
+
+        log('\nDone!');
+      } catch (e) {
+        log('Error: ' + e.message);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,9 +1,5 @@
 import { encodeWav } from './wavEncoder'
 
-function isAudioWorkletSupported(): boolean {
-  return typeof AudioWorkletNode !== 'undefined'
-}
-
 let audioContext: AudioContext | null = null
 
 export function getAudioContext(): AudioContext {
@@ -72,85 +68,19 @@ export function float32ToAudioBuffer(
   return buffer
 }
 
-async function processAudioFallback(
-  inputBuffer: AudioBuffer,
-  onProgress?: (progress: number) => void
-): Promise<AudioBuffer> {
-  // Use the original synchronous processing (lazy import to avoid circular deps)
-  const { runInference } = await import('./onnxRuntime')
-  const float32 = audioBufferToFloat32(inputBuffer)
-
-  onProgress?.(0.1)
-  const processed = await runInference(float32, inputBuffer.sampleRate, (p) => {
-    onProgress?.(0.1 + p * 0.8)
-  })
-  onProgress?.(0.9)
-
-  return float32ToAudioBuffer(processed, inputBuffer.sampleRate, 1)
-}
-
 export async function processAudio(
   inputBuffer: AudioBuffer,
   onProgress?: (progress: number) => void
 ): Promise<AudioBuffer> {
-  // Fallback for browsers without AudioWorklet support
-  if (!isAudioWorkletSupported()) {
-    console.warn('AudioWorklet not supported, falling back to synchronous processing')
-    return processAudioFallback(inputBuffer, onProgress)
-  }
+  const { runInference } = await import('./onnxRuntime')
+  const float32 = audioBufferToFloat32(inputBuffer)
 
-  const sampleRate = inputBuffer.sampleRate
+  console.log('Starting audio processing, total samples:', float32.length)
 
-  // Create Worker in main thread (where Worker is available)
-  const worker = new Worker('/workers/onnx-worker.js')
+  const processed = await runInference(float32, inputBuffer.sampleRate, onProgress)
 
-  // Create OfflineAudioContext
-  const offlineCtx = new OfflineAudioContext(
-    1,
-    inputBuffer.length,
-    sampleRate
-  )
-
-  // Load AudioWorklet
-  await offlineCtx.audioWorklet.addModule('/worklets/df-processor.js')
-
-  // Create Processor node with Worker passed via options
-  const processor = new AudioWorkletNode(offlineCtx, 'df-processor', {
-    processorOptions: { worker }
-  })
-
-  // Wait for Worker to be ready
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Worker initialization timeout')), 30000)
-
-    processor.port.onmessage = (e) => {
-      if (e.data.type === 'WORKER_READY') {
-        clearTimeout(timeout)
-        resolve()
-      }
-    }
-
-    // Send initialization message
-    processor.port.postMessage({ type: 'INIT' })
-  })
-
-  onProgress?.(0.1)
-
-  // Connect audio source
-  const source = offlineCtx.createBufferSource()
-  source.buffer = inputBuffer
-  source.connect(processor)
-  processor.connect(offlineCtx.destination)
-
-  // Render audio
-  const renderedBuffer = await offlineCtx.startRendering()
-
-  // Clean up worker
-  worker.terminate()
-
-  onProgress?.(1.0)
-
-  return renderedBuffer
+  console.log('Audio processing completed')
+  return float32ToAudioBuffer(processed, inputBuffer.sampleRate, 1)
 }
 
 export function audioBufferToWav(buffer: AudioBuffer): Blob {

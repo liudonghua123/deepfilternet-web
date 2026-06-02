@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick, shallowRef } from 'vue'
 import DropZone from './components/DropZone.vue'
 import WaveformCanvas from './components/WaveformCanvas.vue'
 import ProcessButton from './components/ProcessButton.vue'
@@ -11,7 +11,7 @@ import { loadModel } from './utils/onnxRuntime'
 // State
 const audioFile = ref<File | null>(null)
 const audioBuffer = ref<AudioBuffer | null>(null)
-const processedBuffer = ref<AudioBuffer | null>(null)
+const processedBuffer = shallowRef<AudioBuffer | null>(null)
 
 const modelStatus = ref<ModelStatus>('unloaded')
 
@@ -73,11 +73,12 @@ async function handleFileSelected(file: File) {
 }
 
 async function handleProcess() {
-  if (!audioBuffer.value || modelStatus.value !== 'ready') return
+  if (!audioBuffer.value) return
 
   error.value = null
   processStatus.value = 'processing'
   processProgress.value = 0
+  await nextTick()
 
   try {
     processedBuffer.value = await processAudio(audioBuffer.value, (p) => {
@@ -85,6 +86,7 @@ async function handleProcess() {
     })
     processStatus.value = 'done'
   } catch (e) {
+    console.error('Processing error:', e)
     processStatus.value = 'error'
     error.value = '处理失败，请重试'
   }
@@ -228,7 +230,8 @@ onMounted(() => {
         <div class="flex justify-center pt-2">
           <ProcessButton
             :status="processStatus"
-            :disabled="!audioBuffer || modelStatus !== 'ready'"
+            :disabled="!audioBuffer || processStatus === 'processing'"
+            :progress="processProgress"
             @process="handleProcess"
           />
         </div>
