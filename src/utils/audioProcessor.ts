@@ -1,5 +1,4 @@
 import { encodeWav } from './wavEncoder'
-import { runInference } from './onnxRuntime'
 
 let audioContext: AudioContext | null = null
 
@@ -73,35 +72,50 @@ export async function processAudio(
   inputBuffer: AudioBuffer,
   onProgress?: (progress: number) => void
 ): Promise<AudioBuffer> {
-  const float32 = audioBufferToFloat32(inputBuffer)
+  const sampleRate = inputBuffer.sampleRate
 
-  // Normalize
-  let maxVal = 0
-  for (let i = 0; i < float32.length; i++) {
-    const abs = Math.abs(float32[i])
-    if (abs > maxVal) maxVal = abs
-  }
-  if (maxVal > 0) {
-    for (let i = 0; i < float32.length; i++) {
-      float32[i] /= maxVal
+  // Create OfflineAudioContext
+  const offlineCtx = new OfflineAudioContext(
+    1,
+    inputBuffer.length,
+    sampleRate
+  )
+
+  // Load AudioWorklet
+  await offlineCtx.audioWorklet.addModule('/worklets/df-processor.js')
+
+  // Create Processor node
+  const processor = new AudioWorkletNode(offlineCtx, 'df-processor')
+
+  // Wait for Worker to be ready
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Worker initialization timeout')), 30000)
+
+    processor.port.onmessage = (e) => {
+      if (e.data.type === 'WORKER_READY') {
+        clearTimeout(timeout)
+        resolve()
+      }
     }
-  }
 
-  onProgress?.(0.2)
-
-  const processed = await runInference(float32, inputBuffer.sampleRate, (p) => {
-    onProgress?.(0.2 + p * 0.6)
+    // Send initialization message
+    processor.port.postMessage({ type: 'INIT' })
   })
 
-  // Denormalize
-  for (let i = 0; i < processed.length; i++) {
-    processed[i] *= maxVal
-  }
+  onProgress?.(0.1)
 
-  onProgress?.(0.9)
+  // Connect audio source
+  const source = offlineCtx.createBufferSource()
+  source.buffer = inputBuffer
+  source.connect(processor)
+  processor.connect(offlineCtx.destination)
 
-  const outputBuffer = float32ToAudioBuffer(processed, inputBuffer.sampleRate, 1)
-  return outputBuffer
+  // Render audio
+  const renderedBuffer = await offlineCtx.startRendering()
+
+  onProgress?.(1.0)
+
+  return renderedBuffer
 }
 
 export function audioBufferToWav(buffer: AudioBuffer): Blob {
