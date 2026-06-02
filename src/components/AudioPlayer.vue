@@ -200,10 +200,14 @@ function encodeWAV(buffer: AudioBuffer): Blob {
 }
 
 async function encodeMP3(buffer: AudioBuffer): Promise<Blob> {
+  // MP3 encoding not yet implemented - falling back to WAV
+  // In production, use lamejs or similar library
   return encodeWAV(buffer)
 }
 
 async function encodeOGG(buffer: AudioBuffer): Promise<Blob> {
+  // OGG encoding not yet implemented - falling back to WAV
+  // In production, use libvorbis.js or similar
   return encodeWAV(buffer)
 }
 
