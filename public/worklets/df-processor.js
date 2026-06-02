@@ -17,6 +17,13 @@ class DeepFilterProcessor extends AudioWorkletProcessor {
         this.port.postMessage({ type: 'WORKER_READY' });
       }
     };
+
+    // Forward initialization commands from main thread
+    this.port.onmessage = (e) => {
+      if (e.data.type === 'INIT') {
+        this.worker.postMessage(e.data);
+      }
+    };
   }
 
   process(inputs, outputs) {
